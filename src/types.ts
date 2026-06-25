@@ -28,15 +28,25 @@ export interface ShapeNodeData extends Record<string, unknown> {
   kind?: string;
   /** Free-form subtitle/metadata line. */
   subtitle?: string;
+  /** True for container/group nodes that map to a Mermaid `subgraph`. */
+  group?: boolean;
 }
 
-export type FlowNode = Node<ShapeNodeData, "shape">;
+/** A node is either a regular shape ("shape") or a container ("group"). */
+export type FlowNode = Node<ShapeNodeData>;
+
+export type EdgeLineStyle = "solid" | "dotted" | "thick";
+/** Curve/router used to draw an edge on the canvas. */
+export type EdgeCurve = "smooth" | "straight" | "step" | "bezier";
+/** Where arrow heads sit on an edge. */
+export type ArrowDir = "end" | "both" | "start" | "none";
+
 export type FlowEdge = Edge<{
   label?: string;
   style?: EdgeLineStyle;
+  curve?: EdgeCurve;
+  arrow?: ArrowDir;
 }>;
-
-export type EdgeLineStyle = "solid" | "dotted" | "thick";
 
 export interface DiagramSnapshot {
   direction: Direction;

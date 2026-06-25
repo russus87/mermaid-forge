@@ -17,11 +17,13 @@ import type {
 } from "../types";
 import { PALETTE_INDEX } from "../mermaid/nodeCatalog";
 import { parseMermaid } from "../mermaid/parse";
-import { layeredLayout } from "../mermaid/layout";
+import { autoLayout } from "../mermaid/autoLayout";
 import { generateMermaid } from "../mermaid/generate";
 import { getHelperLines } from "../mermaid/helperLines";
 import { detectDiagramType } from "../mermaid/detect";
+import { groupSelection, parentsFirst, refitGroups, ungroup } from "../mermaid/groups";
 import type { Template } from "../mermaid/templates";
+import type { ArrowDir, EdgeCurve } from "../types";
 
 export type Theme = "dark" | "light";
 export type Mode = "visual" | "code";
@@ -76,8 +78,22 @@ interface State extends Snapshot {
   updateEdge: (id: string, patch: { label?: string; style?: "solid" | "dotted" | "thick" }) => void;
   setEdgeStyle: (id: string, style: "solid" | "dotted" | "thick") => void;
   setEdgeLabel: (id: string, label: string) => void;
+  setEdgeCurve: (id: string, curve: EdgeCurve) => void;
+  setEdgeArrow: (id: string, arrow: ArrowDir) => void;
   deleteSelected: () => void;
   select: (nodeId: string | null, edgeId?: string | null) => void;
+
+  // node creation by dragging a connection to empty canvas
+  addNodeWithEdge: (sourceId: string, sourceHandle: string | null, position: { x: number; y: number }) => void;
+
+  // grouping / containers
+  groupSelected: () => void;
+  ungroupSelected: () => void;
+  reparentNode: (nodeId: string, groupId: string | null) => void;
+
+  // alignment & distribution
+  alignNodes: (kind: "left" | "hcenter" | "right" | "top" | "vcenter" | "bottom") => void;
+  distributeNodes: (axis: "h" | "v") => void;
 
   // clipboard
   copySelection: () => void;
@@ -226,6 +242,19 @@ export const useStore = create<State>((set, get) => ({
     if (!item) return;
     get().commit();
     const id = `${item.id}-${nanoid(5)}`;
+    if (item.group) {
+      const group: FlowNode = {
+        id,
+        type: "group",
+        position,
+        width: 260,
+        height: 180,
+        data: { label: item.label, shape: "rectangle", color: item.color, kind: item.kind, group: true },
+      };
+      // Group nodes must be listed before any potential children.
+      set((s) => ({ nodes: parentsFirst([group, ...s.nodes]), selectedNodeId: id, dirty: true }));
+      return;
+    }
     const node: FlowNode = {
       id,
       type: "shape",
@@ -240,6 +269,30 @@ export const useStore = create<State>((set, get) => ({
       },
     };
     set((s) => ({ nodes: [...s.nodes, node], selectedNodeId: id, dirty: true }));
+  },
+
+  addNodeWithEdge: (sourceId, sourceHandle, position) => {
+    get().commit();
+    const id = `node-${nanoid(5)}`;
+    const node: FlowNode = {
+      id,
+      type: "shape",
+      position: { x: position.x - 80, y: position.y - 30 },
+      data: { label: "New node", shape: "rounded", color: "#6366f1", icon: "Square" },
+    };
+    const edge: FlowEdge = {
+      id: `e-${nanoid(6)}`,
+      source: sourceId,
+      target: id,
+      sourceHandle: sourceHandle ?? undefined,
+      data: { style: "solid", arrow: "end" },
+    };
+    set((s) => ({
+      nodes: [...s.nodes, node],
+      edges: [...s.edges, edge],
+      selectedNodeId: id,
+      dirty: true,
+    }));
   },
 
   addBlankNode: (position) => {
@@ -272,6 +325,113 @@ export const useStore = create<State>((set, get) => ({
 
   setEdgeStyle: (id, style) => get().updateEdge(id, { style }),
   setEdgeLabel: (id, label) => get().updateEdge(id, { label }),
+  setEdgeCurve: (id, curve) => {
+    get().commit();
+    set((s) => ({ edges: s.edges.map((e) => (e.id === id ? { ...e, data: { ...e.data, curve } } : e)), dirty: true }));
+  },
+  setEdgeArrow: (id, arrow) => {
+    get().commit();
+    set((s) => ({ edges: s.edges.map((e) => (e.id === id ? { ...e, data: { ...e.data, arrow } } : e)), dirty: true }));
+  },
+
+  groupSelected: () => {
+    const { nodes, selectedNodeId } = get();
+    const ids = nodes.filter((n) => n.selected).map((n) => n.id);
+    if (!ids.length && selectedNodeId) ids.push(selectedNodeId);
+    if (ids.length < 1) return;
+    get().commit();
+    set({ nodes: groupSelection(get().nodes, ids), dirty: true });
+  },
+
+  ungroupSelected: () => {
+    const { nodes, selectedNodeId } = get();
+    const groupIds = nodes.filter((n) => n.selected && n.data.group).map((n) => n.id);
+    const sel = nodes.find((n) => n.id === selectedNodeId);
+    if (sel?.data.group) groupIds.push(sel.id);
+    if (!groupIds.length) return;
+    get().commit();
+    let next = get().nodes;
+    for (const gid of groupIds) next = ungroup(next, gid);
+    set({ nodes: next, selectedNodeId: null, dirty: true });
+  },
+
+  reparentNode: (nodeId, groupId) => {
+    const { nodes } = get();
+    const node = nodes.find((n) => n.id === nodeId);
+    if (!node || node.data.group) return;
+    if ((node.parentId ?? null) === groupId) return;
+    get().commit();
+    const byId = new Map(nodes.map((n) => [n.id, n]));
+    const absX = node.parentId ? (byId.get(node.parentId)?.position.x ?? 0) + node.position.x : node.position.x;
+    const absY = node.parentId ? (byId.get(node.parentId)?.position.y ?? 0) + node.position.y : node.position.y;
+    let next: FlowNode[];
+    if (groupId) {
+      const g = byId.get(groupId);
+      if (!g) return;
+      next = nodes.map((n) =>
+        n.id === nodeId
+          ? { ...n, parentId: groupId, extent: "parent" as const, position: { x: absX - g.position.x, y: absY - g.position.y } }
+          : n,
+      );
+    } else {
+      next = nodes.map((n) =>
+        n.id === nodeId ? { ...n, parentId: undefined, extent: undefined, position: { x: absX, y: absY } } : n,
+      );
+    }
+    set({ nodes: parentsFirst(refitGroups(next)), dirty: true });
+  },
+
+  alignNodes: (kind) => {
+    const sel = get().nodes.filter((n) => n.selected && !n.data.group);
+    if (sel.length < 2) return;
+    get().commit();
+    const xs = sel.map((n) => n.position.x);
+    const ys = sel.map((n) => n.position.y);
+    const left = Math.min(...xs);
+    const right = Math.max(...sel.map((n) => n.position.x + ((n.measured?.width as number) ?? 190)));
+    const top = Math.min(...ys);
+    const bottom = Math.max(...sel.map((n) => n.position.y + ((n.measured?.height as number) ?? 90)));
+    const hc = (left + right) / 2;
+    const vc = (top + bottom) / 2;
+    const ids = new Set(sel.map((n) => n.id));
+    set((s) => ({
+      nodes: s.nodes.map((n) => {
+        if (!ids.has(n.id)) return n;
+        const w = (n.measured?.width as number) ?? 190;
+        const h = (n.measured?.height as number) ?? 90;
+        const p = { ...n.position };
+        if (kind === "left") p.x = left;
+        else if (kind === "right") p.x = right - w;
+        else if (kind === "hcenter") p.x = hc - w / 2;
+        else if (kind === "top") p.y = top;
+        else if (kind === "bottom") p.y = bottom - h;
+        else if (kind === "vcenter") p.y = vc - h / 2;
+        return { ...n, position: p };
+      }),
+      dirty: true,
+    }));
+  },
+
+  distributeNodes: (axis) => {
+    const sel = get().nodes.filter((n) => n.selected && !n.data.group);
+    if (sel.length < 3) return;
+    get().commit();
+    const sorted = [...sel].sort((a, b) =>
+      axis === "h" ? a.position.x - b.position.x : a.position.y - b.position.y,
+    );
+    const first = sorted[0].position[axis === "h" ? "x" : "y"];
+    const last = sorted[sorted.length - 1].position[axis === "h" ? "x" : "y"];
+    const step = (last - first) / (sorted.length - 1);
+    const pos = new Map(sorted.map((n, i) => [n.id, first + i * step]));
+    set((s) => ({
+      nodes: s.nodes.map((n) =>
+        pos.has(n.id)
+          ? { ...n, position: axis === "h" ? { ...n.position, x: pos.get(n.id)! } : { ...n.position, y: pos.get(n.id)! } }
+          : n,
+      ),
+      dirty: true,
+    }));
+  },
 
   deleteSelected: () => {
     const { nodes, edges, selectedNodeId, selectedEdgeId } = get();
@@ -357,7 +517,7 @@ export const useStore = create<State>((set, get) => ({
 
   relayout: () => {
     get().commit();
-    set((s) => ({ nodes: layeredLayout(s.nodes, s.edges, s.direction), dirty: true }));
+    set((s) => ({ nodes: autoLayout(s.nodes, s.edges, s.direction), dirty: true }));
   },
 
   applyCode: (code) => {
@@ -365,7 +525,7 @@ export const useStore = create<State>((set, get) => ({
     if (res.error) return { ok: false, error: res.error };
     get().commit();
     set({
-      nodes: layeredLayout(res.nodes, res.edges, res.direction),
+      nodes: autoLayout(res.nodes, res.edges, res.direction),
       edges: res.edges,
       direction: res.direction,
       mode: "visual",

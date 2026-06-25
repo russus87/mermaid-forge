@@ -1,4 +1,5 @@
 import mermaid from "mermaid";
+import { jsPDF } from "jspdf";
 
 let idCounter = 0;
 
@@ -15,8 +16,14 @@ export async function renderSvg(code: string, theme: "dark" | "light"): Promise<
   return svg;
 }
 
-/** Rasterize an SVG string to a PNG byte array at the given scale. */
-export async function svgToPng(svg: string, scale = 2): Promise<Uint8Array> {
+interface Raster {
+  canvas: HTMLCanvasElement;
+  width: number;
+  height: number;
+}
+
+/** Draw an SVG string onto a canvas at the given scale. */
+async function rasterize(svg: string, scale: number): Promise<Raster> {
   const sized = ensureSize(svg);
   const blob = new Blob([sized.svg], { type: "image/svg+xml;charset=utf-8" });
   const url = URL.createObjectURL(blob);
@@ -28,7 +35,6 @@ export async function svgToPng(svg: string, scale = 2): Promise<Uint8Array> {
       img.onerror = () => reject(new Error("Failed to load SVG for export"));
       img.src = url;
     });
-
     const canvas = document.createElement("canvas");
     canvas.width = Math.max(1, Math.round(sized.width * scale));
     canvas.height = Math.max(1, Math.round(sized.height * scale));
@@ -36,12 +42,38 @@ export async function svgToPng(svg: string, scale = 2): Promise<Uint8Array> {
     if (!ctx) throw new Error("Canvas 2D context unavailable");
     ctx.scale(scale, scale);
     ctx.drawImage(img, 0, 0, sized.width, sized.height);
-
-    const dataUrl = canvas.toDataURL("image/png");
-    return dataUrlToBytes(dataUrl);
+    return { canvas, width: sized.width, height: sized.height };
   } finally {
     URL.revokeObjectURL(url);
   }
+}
+
+/** Rasterize an SVG string to PNG bytes. */
+export async function svgToPng(svg: string, scale = 2): Promise<Uint8Array> {
+  const { canvas } = await rasterize(svg, scale);
+  return dataUrlToBytes(canvas.toDataURL("image/png"));
+}
+
+/** Copy the rendered diagram to the clipboard as a PNG image. */
+export async function copyPngToClipboard(svg: string, scale = 2): Promise<void> {
+  const { canvas } = await rasterize(svg, scale);
+  const blob: Blob = await new Promise((resolve, reject) =>
+    canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("toBlob failed"))), "image/png"),
+  );
+  if (!navigator.clipboard || typeof ClipboardItem === "undefined") {
+    throw new Error("Clipboard image copy is not supported here");
+  }
+  await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
+}
+
+/** Render the diagram into a single-page PDF sized to the image. */
+export async function svgToPdf(svg: string, scale = 2): Promise<Uint8Array> {
+  const { canvas, width, height } = await rasterize(svg, scale);
+  const dataUrl = canvas.toDataURL("image/png");
+  const orientation = width >= height ? "landscape" : "portrait";
+  const pdf = new jsPDF({ orientation, unit: "pt", format: [width, height] });
+  pdf.addImage(dataUrl, "PNG", 0, 0, width, height);
+  return new Uint8Array(pdf.output("arraybuffer"));
 }
 
 function ensureSize(svg: string): { svg: string; width: number; height: number } {
@@ -49,8 +81,7 @@ function ensureSize(svg: string): { svg: string; width: number; height: number }
   const hMatch = svg.match(/height="([\d.]+)"/);
   let width = wMatch ? parseFloat(wMatch[1]) : 0;
   let height = hMatch ? parseFloat(hMatch[1]) : 0;
-
-  if ((!width || !height)) {
+  if (!width || !height) {
     const vb = svg.match(/viewBox="[\d.]+ [\d.]+ ([\d.]+) ([\d.]+)"/);
     if (vb) {
       width = width || parseFloat(vb[1]);

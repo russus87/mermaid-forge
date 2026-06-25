@@ -1,4 +1,5 @@
 import type {
+  ArrowDir,
   Direction,
   EdgeLineStyle,
   FlowEdge,
@@ -12,10 +13,11 @@ interface ParsedNode {
   shape: ShapeKind;
   kind?: string;
   color?: string;
+  group?: boolean;
+  parentId?: string;
 }
 
 const SHAPE_PATTERNS: { re: RegExp; shape: ShapeKind }[] = [
-  // Order matters: most specific (longest delimiters) first.
   { re: /^\(\(\((.*)\)\)\)$/, shape: "doublecircle" },
   { re: /^\(\((.*)\)\)$/, shape: "circle" },
   { re: /^\(\[(.*)\]\)$/, shape: "stadium" },
@@ -31,9 +33,7 @@ const SHAPE_PATTERNS: { re: RegExp; shape: ShapeKind }[] = [
 
 function stripQuotes(s: string): string {
   const t = s.trim();
-  if (t.startsWith('"') && t.endsWith('"')) {
-    return t.slice(1, -1).replace(/&quot;/g, '"');
-  }
+  if (t.startsWith('"') && t.endsWith('"')) return t.slice(1, -1).replace(/&quot;/g, '"');
   return t;
 }
 
@@ -45,26 +45,31 @@ function parseShape(body: string): { label: string; shape: ShapeKind } {
   return { label: stripQuotes(body), shape: "rectangle" };
 }
 
-/** Split "Kind: Label" decorated labels back into parts. */
 function splitKind(label: string): { label: string; kind?: string } {
   const m = label.match(/^([A-Za-z][\w ]*?):\s+(.*)$/);
   if (m) return { kind: m[1], label: m[2] };
   return { label };
 }
 
-// Matches:  ID[shape body]  with the id being the leading token.
 const NODE_DECL = /^([A-Za-z_][\w-]*)([\[\({].*[\]\)}])$/;
-
-// Matches an edge:  A -->|label| B   /   A -.-> B   /   A ==> B
 const EDGE_RE =
-  /^([A-Za-z_][\w-]*)\s*(-->|---|-\.->|-\.-|==>|===)\s*(?:\|"?(.*?)"?\|)?\s*([A-Za-z_][\w-]*)/;
-
+  /^([A-Za-z_][\w-]*)\s*([-.=<>o]{2,})\s*(?:\|"?(.*?)"?\|)?\s*([A-Za-z_][\w-]*)/;
 const STYLE_RE = /^style\s+([A-Za-z_][\w-]*)\s+(.*)$/;
+const SUBGRAPH_RE = /^subgraph\s+([A-Za-z_][\w-]*)?\s*(?:\["?(.*?)"?\]|"?([^[\]]*?)"?)?\s*$/;
 
 function edgeStyle(token: string): EdgeLineStyle {
-  if (token.startsWith("-.")) return "dotted";
-  if (token.startsWith("==")) return "thick";
+  if (token.includes(".")) return "dotted";
+  if (token.includes("=")) return "thick";
   return "solid";
+}
+
+function edgeArrow(token: string): ArrowDir {
+  const left = token.startsWith("<") || token.startsWith("x") || token.startsWith("o");
+  const right = token.endsWith(">") || token.endsWith("x") || token.endsWith("o");
+  if (left && right) return "both";
+  if (left) return "start";
+  if (right) return "end";
+  return "none";
 }
 
 export interface ParseResult {
@@ -74,11 +79,6 @@ export interface ParseResult {
   error?: string;
 }
 
-/**
- * Parse a Mermaid `flowchart` document back into canvas nodes + edges.
- * Nodes are laid out on a simple grid; positions are refined by the
- * layout pass in the store when the graph is loaded.
- */
 export function parseMermaid(src: string): ParseResult {
   const lines = src
     .split("\n")
@@ -89,6 +89,8 @@ export function parseMermaid(src: string): ParseResult {
   const nodeMap = new Map<string, ParsedNode>();
   const edges: FlowEdge[] = [];
   const colorMap = new Map<string, string>();
+  const groupStack: string[] = [];
+  let autoGroup = 0;
 
   const header = lines.shift() ?? "";
   const dirMatch = header.match(/^(?:flowchart|graph)\s+(TB|TD|BT|LR|RL)/i);
@@ -107,24 +109,43 @@ export function parseMermaid(src: string): ParseResult {
   const ensure = (id: string): ParsedNode => {
     let n = nodeMap.get(id);
     if (!n) {
-      n = { id, label: id, shape: "rectangle" };
+      n = { id, label: id, shape: "rectangle", parentId: groupStack[groupStack.length - 1] };
       nodeMap.set(id, n);
+    } else if (!n.parentId && groupStack.length) {
+      n.parentId = groupStack[groupStack.length - 1];
     }
     return n;
   };
 
   for (const line of lines) {
-    // style line
-    const sm = line.match(STYLE_RE);
-    if (sm) {
-      const fillStroke = sm[2].match(/stroke:\s*(#[0-9a-fA-F]{3,6})/);
-      if (fillStroke) colorMap.set(sm[1], fillStroke[1]);
+    if (/^end$/i.test(line)) {
+      groupStack.pop();
       continue;
     }
 
-    // edge
+    const sg = line.match(SUBGRAPH_RE);
+    if (line.toLowerCase().startsWith("subgraph") && sg) {
+      const id = sg[1] || `group_${autoGroup++}`;
+      const label = stripQuotes(sg[2] ?? sg[3] ?? id);
+      const { label: lbl, kind } = splitKind(label);
+      const g = ensure(id);
+      g.group = true;
+      g.label = lbl;
+      g.kind = kind;
+      g.shape = "rectangle";
+      groupStack.push(id);
+      continue;
+    }
+
+    const sm = line.match(STYLE_RE);
+    if (sm) {
+      const stroke = sm[2].match(/stroke:\s*(#[0-9a-fA-F]{3,6})/);
+      if (stroke) colorMap.set(sm[1], stroke[1]);
+      continue;
+    }
+
     const em = line.match(EDGE_RE);
-    if (em) {
+    if (em && !line.toLowerCase().startsWith("subgraph")) {
       ensure(em[1]);
       ensure(em[4]);
       edges.push({
@@ -134,12 +155,11 @@ export function parseMermaid(src: string): ParseResult {
         data: {
           label: em[3] ? stripQuotes(em[3]) : undefined,
           style: edgeStyle(em[2]),
+          arrow: edgeArrow(em[2]),
         },
       });
-      // A node may carry its shape inline on either side, handled below.
     }
 
-    // node declaration (possibly the source side of an edge with a shape)
     const decl = line.match(NODE_DECL);
     if (decl) {
       const { label, shape } = parseShape(decl[2]);
@@ -151,23 +171,25 @@ export function parseMermaid(src: string): ParseResult {
     }
   }
 
-  // Apply parsed colors.
   for (const [id, color] of colorMap) {
     const n = nodeMap.get(id);
     if (n) n.color = color;
   }
 
-  // Grid layout placeholder; the store applies a real layout afterwards.
-  const cols = Math.max(1, Math.ceil(Math.sqrt(nodeMap.size)));
-  const nodes: FlowNode[] = [...nodeMap.values()].map((n, i) => ({
+  const parsed = [...nodeMap.values()];
+  const cols = Math.max(1, Math.ceil(Math.sqrt(parsed.length)));
+  const nodes: FlowNode[] = parsed.map((n, i) => ({
     id: n.id,
-    type: "shape",
+    type: n.group ? "group" : "shape",
     position: { x: (i % cols) * 240 + 60, y: Math.floor(i / cols) * 160 + 60 },
+    parentId: n.parentId,
+    extent: n.parentId ? "parent" : undefined,
     data: {
       label: n.label,
       shape: n.shape,
       kind: n.kind,
       color: n.color,
+      group: n.group,
     },
   }));
 

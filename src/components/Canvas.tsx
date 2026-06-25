@@ -10,25 +10,38 @@ import {
   useReactFlow,
   type Edge,
   type EdgeTypes,
+  type MarkerType,
   type NodeTypes,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 
 import { ShapeNode } from "./nodes/ShapeNode";
+import { GroupNode } from "./nodes/GroupNode";
+import { AlignmentToolbar } from "./AlignmentToolbar";
 import { useStore } from "../store/useStore";
 import type { FlowEdge } from "../types";
 
-const nodeTypes: NodeTypes = { shape: ShapeNode };
+const nodeTypes: NodeTypes = { shape: ShapeNode, group: GroupNode };
 const edgeTypes: EdgeTypes = {};
+
+const CURVE_TYPE: Record<string, string> = {
+  smooth: "smoothstep",
+  straight: "straight",
+  step: "step",
+  bezier: "default",
+};
 
 function styleForEdge(e: FlowEdge): Edge {
   const variant = e.data?.style ?? "solid";
+  const dir = e.data?.arrow ?? "end";
+  const marker = { type: "arrowclosed" as MarkerType, color: "#8b93a7", width: 18, height: 18 };
   return {
     ...e,
     label: e.data?.label,
-    type: "smoothstep",
+    type: CURVE_TYPE[e.data?.curve ?? "smooth"],
     animated: variant === "dotted",
-    markerEnd: { type: "arrowclosed" as never, color: "#8b93a7", width: 18, height: 18 },
+    markerEnd: dir === "end" || dir === "both" ? marker : undefined,
+    markerStart: dir === "start" || dir === "both" ? marker : undefined,
     style: {
       stroke: "var(--edge-color)",
       strokeWidth: variant === "thick" ? 3.5 : 2,
@@ -41,23 +54,16 @@ function styleForEdge(e: FlowEdge): Edge {
   };
 }
 
-/** Alignment guides drawn in flow coordinates (auto-transformed by the viewport). */
 function HelperLines() {
   const helperLines = useStore((s) => s.helperLines);
   if (helperLines.horizontal == null && helperLines.vertical == null) return null;
   return (
     <ViewportPortal>
       {helperLines.vertical != null && (
-        <div
-          className="mf-guide mf-guide-v"
-          style={{ transform: `translateX(${helperLines.vertical}px)` }}
-        />
+        <div className="mf-guide mf-guide-v" style={{ transform: `translateX(${helperLines.vertical}px)` }} />
       )}
       {helperLines.horizontal != null && (
-        <div
-          className="mf-guide mf-guide-h"
-          style={{ transform: `translateY(${helperLines.horizontal}px)` }}
-        />
+        <div className="mf-guide mf-guide-h" style={{ transform: `translateY(${helperLines.horizontal}px)` }} />
       )}
     </ViewportPortal>
   );
@@ -65,7 +71,7 @@ function HelperLines() {
 
 function InnerCanvas() {
   const wrapper = useRef<HTMLDivElement>(null);
-  const { screenToFlowPosition } = useReactFlow();
+  const { screenToFlowPosition, getIntersectingNodes } = useReactFlow();
 
   const nodes = useStore((s) => s.nodes);
   const edges = useStore((s) => s.edges);
@@ -74,6 +80,8 @@ function InnerCanvas() {
   const onConnect = useStore((s) => s.onConnect);
   const addNodeFromPalette = useStore((s) => s.addNodeFromPalette);
   const addBlankNode = useStore((s) => s.addBlankNode);
+  const addNodeWithEdge = useStore((s) => s.addNodeWithEdge);
+  const reparentNode = useStore((s) => s.reparentNode);
   const select = useStore((s) => s.select);
   const commit = useStore((s) => s.commit);
 
@@ -105,8 +113,20 @@ function InnerCanvas() {
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
+        onConnectEnd={(event, conn) => {
+          // Dropping a connection on empty canvas spawns a connected node.
+          if (conn.isValid || !conn.fromNode) return;
+          const p = "changedTouches" in event ? event.changedTouches[0] : (event as MouseEvent);
+          const position = screenToFlowPosition({ x: p.clientX, y: p.clientY });
+          addNodeWithEdge(conn.fromNode.id, conn.fromHandle?.id ?? null, position);
+        }}
         onNodeDragStart={() => commit()}
-        onNodeDragStop={() => useStore.setState({ helperLines: { horizontal: null, vertical: null } })}
+        onNodeDragStop={(_, node) => {
+          useStore.setState({ helperLines: { horizontal: null, vertical: null } });
+          if (node.data?.group) return;
+          const overGroup = getIntersectingNodes(node).find((n) => (n.data as { group?: boolean })?.group);
+          reparentNode(node.id, overGroup ? overGroup.id : null);
+        }}
         onDrop={onDrop}
         onDragOver={onDragOver}
         onNodeClick={(_, nd) => select(nd.id, null)}
@@ -142,6 +162,7 @@ function InnerCanvas() {
         />
         <HelperLines />
       </ReactFlow>
+      <AlignmentToolbar />
     </div>
   );
 }

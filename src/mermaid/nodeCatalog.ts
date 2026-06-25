@@ -12,6 +12,8 @@ export interface PaletteItem {
   /** Default accent color. */
   color: string;
   subtitle?: string;
+  /** When true, dropping this item creates a container (subgraph) node. */
+  group?: boolean;
 }
 
 export interface PaletteGroup {
@@ -26,6 +28,15 @@ export interface PaletteGroup {
  * architecture of an OpenShift environment — the core "archmind" use case.
  */
 export const PALETTE: PaletteGroup[] = [
+  {
+    id: "containers",
+    title: "Containers",
+    items: [
+      { id: "group-ns", label: "Namespace", shape: "rectangle", icon: "FolderTree", kind: "Namespace", color: "#cc0000", group: true },
+      { id: "group-zone", label: "Zone / Boundary", shape: "rectangle", icon: "SquareDashedBottom", kind: "Zone", color: "#6366f1", group: true },
+      { id: "group-cluster", label: "Cluster", shape: "rectangle", icon: "CircleDashed", kind: "Cluster", color: "#0891b2", group: true },
+    ],
+  },
   {
     id: "shapes",
     title: "Shapes",
@@ -60,6 +71,59 @@ export const PALETTE: PaletteGroup[] = [
       { id: "os-registry", label: "Registry", shape: "cylinder", icon: "Container", kind: "Registry", color: "#475569" },
       { id: "os-operator", label: "Operator", shape: "hexagon", icon: "Cog", kind: "Operator", color: "#db2777" },
       { id: "os-db", label: "Database", shape: "cylinder", icon: "Database", kind: "StatefulSet", color: "#0d9488" },
+    ],
+  },
+  {
+    id: "kubernetes",
+    title: "Kubernetes",
+    items: [
+      { id: "k8s-deploy", label: "Deployment", shape: "subroutine", icon: "Layers", kind: "Deployment", color: "#326ce5" },
+      { id: "k8s-sts", label: "StatefulSet", shape: "subroutine", icon: "Layers3", kind: "StatefulSet", color: "#326ce5" },
+      { id: "k8s-ds", label: "DaemonSet", shape: "subroutine", icon: "LayoutGrid", kind: "DaemonSet", color: "#326ce5" },
+      { id: "k8s-pod", label: "Pod", shape: "rounded", icon: "Box", kind: "Pod", color: "#2563eb" },
+      { id: "k8s-svc", label: "Service", shape: "rounded", icon: "Network", kind: "Service", color: "#0891b2" },
+      { id: "k8s-ing", label: "Ingress", shape: "stadium", icon: "DoorOpen", kind: "Ingress", color: "#22c55e" },
+      { id: "k8s-job", label: "Job", shape: "rectangle", icon: "SquareCheck", kind: "Job", color: "#7c3aed" },
+      { id: "k8s-cron", label: "CronJob", shape: "rectangle", icon: "Clock", kind: "CronJob", color: "#7c3aed" },
+      { id: "k8s-hpa", label: "HPA", shape: "hexagon", icon: "Gauge", kind: "Autoscaler", color: "#16a34a" },
+    ],
+  },
+  {
+    id: "aws",
+    title: "AWS",
+    items: [
+      { id: "aws-ec2", label: "EC2", shape: "rectangle", icon: "Server", kind: "Compute", color: "#ff9900" },
+      { id: "aws-lambda", label: "Lambda", shape: "hexagon", icon: "Zap", kind: "Serverless", color: "#ff9900" },
+      { id: "aws-s3", label: "S3 Bucket", shape: "cylinder", icon: "Archive", kind: "Storage", color: "#3f8624" },
+      { id: "aws-rds", label: "RDS", shape: "cylinder", icon: "Database", kind: "Database", color: "#3b48cc" },
+      { id: "aws-elb", label: "Load Balancer", shape: "stadium", icon: "Scale", kind: "ELB", color: "#8c4fff" },
+      { id: "aws-apigw", label: "API Gateway", shape: "rounded", icon: "Webhook", kind: "API", color: "#ff4f8b" },
+      { id: "aws-sqs", label: "SQS", shape: "parallelogram", icon: "ListEnd", kind: "Queue", color: "#ff4f8b" },
+      { id: "aws-vpc", label: "VPC", shape: "rectangle", icon: "Cloud", kind: "Network", color: "#8c4fff" },
+    ],
+  },
+  {
+    id: "azure",
+    title: "Azure",
+    items: [
+      { id: "az-vm", label: "Virtual Machine", shape: "rectangle", icon: "Server", kind: "Compute", color: "#0078d4" },
+      { id: "az-func", label: "Functions", shape: "hexagon", icon: "Zap", kind: "Serverless", color: "#0078d4" },
+      { id: "az-blob", label: "Blob Storage", shape: "cylinder", icon: "Archive", kind: "Storage", color: "#50e6ff" },
+      { id: "az-sql", label: "Azure SQL", shape: "cylinder", icon: "Database", kind: "Database", color: "#0062ad" },
+      { id: "az-aks", label: "AKS", shape: "subroutine", icon: "Layers", kind: "Kubernetes", color: "#0078d4" },
+      { id: "az-lb", label: "Load Balancer", shape: "stadium", icon: "Scale", kind: "Network", color: "#50e6ff" },
+    ],
+  },
+  {
+    id: "gcp",
+    title: "Google Cloud",
+    items: [
+      { id: "gcp-gce", label: "Compute Engine", shape: "rectangle", icon: "Server", kind: "Compute", color: "#4285f4" },
+      { id: "gcp-run", label: "Cloud Run", shape: "rounded", icon: "Rocket", kind: "Serverless", color: "#4285f4" },
+      { id: "gcp-gcs", label: "Cloud Storage", shape: "cylinder", icon: "Archive", kind: "Storage", color: "#34a853" },
+      { id: "gcp-sql", label: "Cloud SQL", shape: "cylinder", icon: "Database", kind: "Database", color: "#ea4335" },
+      { id: "gcp-gke", label: "GKE", shape: "subroutine", icon: "Layers", kind: "Kubernetes", color: "#4285f4" },
+      { id: "gcp-lb", label: "Load Balancer", shape: "stadium", icon: "Scale", kind: "Network", color: "#fbbc04" },
     ],
   },
 ];

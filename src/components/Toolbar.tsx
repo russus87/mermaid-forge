@@ -3,8 +3,9 @@ import * as Icons from "lucide-react";
 
 import { useStore } from "../store/useStore";
 import type { Direction } from "../types";
-import { openTextFile, saveFile } from "../services/files";
-import { renderSvg, svgToPng } from "../services/export";
+import { openTextFile, readFileByPath, saveFile } from "../services/files";
+import { copyPngToClipboard, renderSvg, svgToPdf, svgToPng } from "../services/export";
+import { getRecent, pushRecent, type RecentFile } from "../services/recent";
 
 interface Props {
   onOpenTemplates: () => void;
@@ -35,17 +36,27 @@ export function Toolbar({ onOpenTemplates, onOpenImport }: Props) {
   const filePath = useStore((s) => s.filePath);
 
   const [busy, setBusy] = useState<string | null>(null);
+  const [recentOpen, setRecentOpen] = useState(false);
+  const [recent, setRecent] = useState<RecentFile[]>([]);
+  const [copied, setCopied] = useState(false);
+
+  function loadProjectContents(contents: string, path: string | null) {
+    const data = JSON.parse(contents);
+    const st = useStore.getState();
+    if (data.version === 1 && data.snapshot) st.hydrate(data);
+    else st.loadSnapshot({ direction: data.direction ?? "TB", nodes: data.nodes ?? [], edges: data.edges ?? [] });
+    st.setFilePath(path);
+    st.markSaved();
+    if (path) pushRecent(path);
+  }
 
   async function saveProject() {
     const payload = JSON.stringify(useStore.getState().getPersisted(), null, 2);
-    const path = await saveFile({
-      defaultName: fileBase() + ".forge.json",
-      filters: PROJECT_FILTER,
-      contents: payload,
-    });
+    const path = await saveFile({ defaultName: fileBase() + ".forge.json", filters: PROJECT_FILTER, contents: payload });
     if (path) {
       useStore.getState().setFilePath(path);
       useStore.getState().markSaved();
+      pushRecent(path);
     }
   }
 
@@ -53,16 +64,21 @@ export function Toolbar({ onOpenTemplates, onOpenImport }: Props) {
     const res = await openTextFile(PROJECT_FILTER);
     if (!res) return;
     try {
-      const data = JSON.parse(res.contents);
-      const st = useStore.getState();
-      if (data.version === 1 && data.snapshot) {
-        st.hydrate(data);
-      } else {
-        // Legacy: a bare snapshot { direction, nodes, edges }.
-        st.loadSnapshot({ direction: data.direction ?? "TB", nodes: data.nodes ?? [], edges: data.edges ?? [] });
-      }
-      st.setFilePath(res.path);
-      st.markSaved();
+      loadProjectContents(res.contents, res.path);
+    } catch {
+      alert("That file is not a valid Mermaid Forge project.");
+    }
+  }
+
+  async function openByPath(path: string) {
+    setRecentOpen(false);
+    const contents = await readFileByPath(path);
+    if (contents == null) {
+      alert("Could not open that file — it may have moved.");
+      return;
+    }
+    try {
+      loadProjectContents(contents, path);
     } catch {
       alert("That file is not a valid Mermaid Forge project.");
     }
@@ -76,24 +92,17 @@ export function Toolbar({ onOpenTemplates, onOpenImport }: Props) {
     });
   }
 
-  async function exportImage(kind: "svg" | "png") {
+  async function exportImage(kind: "svg" | "png" | "pdf") {
     setBusy(kind);
     try {
       const st = useStore.getState();
       const svg = await renderSvg(st.currentCode(), st.theme);
       if (kind === "svg") {
-        await saveFile({
-          defaultName: fileBase() + ".svg",
-          filters: [{ name: "SVG image", extensions: ["svg"] }],
-          contents: svg,
-        });
+        await saveFile({ defaultName: fileBase() + ".svg", filters: [{ name: "SVG image", extensions: ["svg"] }], contents: svg });
+      } else if (kind === "png") {
+        await saveFile({ defaultName: fileBase() + ".png", filters: [{ name: "PNG image", extensions: ["png"] }], contents: await svgToPng(svg, 2.5) });
       } else {
-        const png = await svgToPng(svg, 2.5);
-        await saveFile({
-          defaultName: fileBase() + ".png",
-          filters: [{ name: "PNG image", extensions: ["png"] }],
-          contents: png,
-        });
+        await saveFile({ defaultName: fileBase() + ".pdf", filters: [{ name: "PDF document", extensions: ["pdf"] }], contents: await svgToPdf(svg, 2.5) });
       }
     } catch (e) {
       alert(`Export failed: ${e instanceof Error ? e.message : e}`);
@@ -102,10 +111,25 @@ export function Toolbar({ onOpenTemplates, onOpenImport }: Props) {
     }
   }
 
+  async function copyPng() {
+    setBusy("copy");
+    try {
+      const st = useStore.getState();
+      const svg = await renderSvg(st.currentCode(), st.theme);
+      await copyPngToClipboard(svg, 2.5);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1400);
+    } catch (e) {
+      alert(`Copy failed: ${e instanceof Error ? e.message : e}`);
+    } finally {
+      setBusy(null);
+    }
+  }
+
   function fileBase(): string {
     if (!filePath) return "diagram";
     const name = filePath.split(/[\\/]/).pop() ?? "diagram";
-    return name.replace(/\.(forge\.json|json|mmd|svg|png)$/i, "");
+    return name.replace(/\.(forge\.json|json|mmd|svg|png|pdf)$/i, "");
   }
 
   return (
@@ -125,6 +149,32 @@ export function Toolbar({ onOpenTemplates, onOpenImport }: Props) {
         <button className="mf-tbtn" onClick={openProject} title="Open project">
           <Icons.FolderOpen size={16} />
         </button>
+        <div className="mf-dropdown">
+          <button
+            className="mf-tbtn"
+            title="Recent files"
+            onClick={() => { setRecent(getRecent()); setRecentOpen((o) => !o); }}
+          >
+            <Icons.History size={16} />
+          </button>
+          {recentOpen && (
+            <>
+              <div className="mf-dropdown-backdrop" onClick={() => setRecentOpen(false)} />
+              <div className="mf-dropdown-menu">
+                {recent.length === 0 ? (
+                  <div className="mf-dropdown-empty">No recent files</div>
+                ) : (
+                  recent.map((r) => (
+                    <button key={r.path} className="mf-dropdown-item" onClick={() => openByPath(r.path)} title={r.path}>
+                      <Icons.FileJson size={14} />
+                      <span>{r.name}</span>
+                    </button>
+                  ))
+                )}
+              </div>
+            </>
+          )}
+        </div>
         <button className="mf-tbtn" onClick={saveProject} title="Save project">
           <Icons.Save size={16} />
         </button>
@@ -169,11 +219,12 @@ export function Toolbar({ onOpenTemplates, onOpenImport }: Props) {
 
       <div className="mf-toolbar-spacer" />
 
-      {mode === "code" && (
-        <span className="mf-mode-badge"><Icons.Code2 size={13} /> Code mode</span>
-      )}
+      {mode === "code" && <span className="mf-mode-badge"><Icons.Code2 size={13} /> Code mode</span>}
 
       <div className="mf-toolbar-group">
+        <button className="mf-tbtn" onClick={copyPng} disabled={busy === "copy"} title="Copy PNG to clipboard">
+          {copied ? <Icons.Check size={16} /> : <Icons.Clipboard size={16} />}
+        </button>
         <button className="mf-tbtn-wide" onClick={exportMermaid} title="Export .mmd">
           <Icons.FileCode2 size={15} /> .mmd
         </button>
@@ -182,6 +233,9 @@ export function Toolbar({ onOpenTemplates, onOpenImport }: Props) {
         </button>
         <button className="mf-tbtn-wide" onClick={() => exportImage("png")} disabled={busy === "png"}>
           {busy === "png" ? <Icons.Loader2 size={15} className="mf-spin" /> : <Icons.ImageDown size={15} />} PNG
+        </button>
+        <button className="mf-tbtn-wide" onClick={() => exportImage("pdf")} disabled={busy === "pdf"}>
+          {busy === "pdf" ? <Icons.Loader2 size={15} className="mf-spin" /> : <Icons.FileText size={15} />} PDF
         </button>
       </div>
 

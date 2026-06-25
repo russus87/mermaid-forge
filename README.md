@@ -20,15 +20,17 @@ Built with Tauri 2 + React. Tiny native binaries, instant startup, fully offline
 
 - **Drag-and-drop canvas** — drop components from the palette, connect them by dragging between handles, resize and re-style on the fly. Powered by [React Flow](https://reactflow.dev).
 - **Bidirectional code ↔ canvas sync** — edit visually and watch the Mermaid source update live, or hand-edit the source and rebuild the canvas with `Ctrl+Enter`.
-- **OpenShift / cloud-native palette** — first-class nodes for *Cluster, Project, Pod, Deployment, Service, Route, Ingress, ConfigMap, Secret, PVC, Operator, Registry* and more, so you can sketch the architecture of an OpenShift environment in seconds.
+- **Container / subgraph nodes** — wrap resources in a **Namespace / Zone / Cluster** box (mapped to Mermaid `subgraph`); drag nodes in and out, children move with the container. The core of real architecture diagrams.
+- **Cloud icon packs** — first-class palettes for **OpenShift, Kubernetes, AWS, Azure, and Google Cloud** (Pod, Service, Route, Lambda, S3, AKS, Cloud Run, …).
 - **Classic flowchart shapes** — process, decision, stadium, cylinder, hexagon, subroutine, parallelogram, and others.
-- **Editing that feels native** — multi-select (rubber-band), group move, **copy / cut / paste / duplicate**, **double-click to rename**, smart **alignment guides** with snapping, **auto-arrange** (layered layout), undo / redo.
+- **Editing that feels native** — multi-select (rubber-band), group move, **copy / cut / paste / duplicate**, **double-click to rename**, **drag a connection onto empty canvas to spawn a connected node**, smart **alignment guides** + an **align/distribute toolbar**, **subgraph-aware auto-arrange** (dagre), undo / redo.
+- **Advanced edge editing** — solid / dotted / thick lines, **arrow direction** (→, ↔, ←, none), and curve style (smooth, bézier, straight, step).
 - **Templates gallery** — start from OpenShift 3-tier, CI/CD pipeline, sequence, class, ER, state machine, Gantt, and more.
 - **Import** any Mermaid source — flowcharts open in the visual editor, everything else in the code editor.
 - **Live Mermaid preview** — render the real Mermaid output side-by-side.
-- **Session restore** — your last diagram and theme are remembered automatically.
+- **Session restore** + **recent files** — pick up exactly where you left off.
 - **Polished, professional UI** — refined dark & light themes, glassy panels, a minimap, snapping grid, and accent-colored nodes.
-- **Export** — `.mmd` source, **SVG**, and high-resolution **PNG**. Save/open native `.forge.json` projects (positions, colors, everything).
+- **Export** — `.mmd` source, **SVG**, high-resolution **PNG**, **PDF**, and **copy PNG to clipboard**. Save/open native `.forge.json` projects.
 
 ## 🖼️ Diagram types
 
@@ -47,6 +49,7 @@ Importing or opening a template automatically picks the right surface for you.
 | Copy / Cut / Paste | `Ctrl+C` / `Ctrl+X` / `Ctrl+V` |
 | Duplicate | `Ctrl+D` |
 | Select all | `Ctrl+A` |
+| Group / Ungroup | `Ctrl+G` / `Ctrl+Shift+G` |
 | Delete selection | `Del` |
 | Apply code → canvas | `Ctrl+Enter` |
 

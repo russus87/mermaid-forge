@@ -30,6 +30,9 @@ export function Inspector() {
   const updateNodeData = useStore((s) => s.updateNodeData);
   const setEdgeLabel = useStore((s) => s.setEdgeLabel);
   const setEdgeStyle = useStore((s) => s.setEdgeStyle);
+  const setEdgeCurve = useStore((s) => s.setEdgeCurve);
+  const setEdgeArrow = useStore((s) => s.setEdgeArrow);
+  const ungroupSelected = useStore((s) => s.ungroupSelected);
   const deleteSelected = useStore((s) => s.deleteSelected);
 
   const node = nodes.find((n) => n.id === selectedNodeId);
@@ -77,6 +80,39 @@ export function Inspector() {
           </div>
         </div>
 
+        <div className="mf-field">
+          <span>Arrows</span>
+          <div className="mf-segmented">
+            {([
+              ["end", "ArrowRight"],
+              ["both", "MoveHorizontal"],
+              ["start", "ArrowLeft"],
+              ["none", "Minus"],
+            ] as const).map(([a, icon]) => {
+              const I = Icons[icon] as Icons.LucideIcon;
+              const active = edge.data?.arrow === a || (!edge.data?.arrow && a === "end");
+              return (
+                <button key={a} className={active ? "active" : ""} onClick={() => setEdgeArrow(edge.id, a)} title={a}>
+                  <I size={15} />
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <label className="mf-field">
+          <span>Curve</span>
+          <select
+            value={edge.data?.curve ?? "smooth"}
+            onChange={(ev) => setEdgeCurve(edge.id, ev.target.value as never)}
+          >
+            <option value="smooth">Smooth step</option>
+            <option value="bezier">Bezier</option>
+            <option value="straight">Straight</option>
+            <option value="step">Step</option>
+          </select>
+        </label>
+
         <button className="mf-danger" onClick={deleteSelected}>
           <Icons.Trash2 size={15} /> Delete connection
         </button>
@@ -85,6 +121,49 @@ export function Inspector() {
   }
 
   if (!node) return null;
+
+  if (node.data.group) {
+    return (
+      <div className="mf-inspector">
+        <header className="mf-inspector-head">
+          <Icons.Group size={16} />
+          <span>Container</span>
+        </header>
+        <label className="mf-field">
+          <span>Title</span>
+          <input value={node.data.label} onChange={(e) => updateNodeData(node.id, { label: e.target.value })} />
+        </label>
+        <label className="mf-field">
+          <span>Category chip</span>
+          <input
+            value={node.data.kind ?? ""}
+            placeholder="e.g. Namespace, Zone…"
+            onChange={(e) => updateNodeData(node.id, { kind: e.target.value || undefined })}
+          />
+        </label>
+        <div className="mf-field">
+          <span>Accent color</span>
+          <div className="mf-swatches">
+            {SWATCHES.map((c) => (
+              <button
+                key={c}
+                className={`mf-swatch ${node.data.color === c ? "active" : ""}`}
+                style={{ background: c }}
+                onClick={() => updateNodeData(node.id, { color: c })}
+                aria-label={c}
+              />
+            ))}
+          </div>
+        </div>
+        <button className="mf-btn-ghost" onClick={ungroupSelected}>
+          <Icons.Ungroup size={15} /> Ungroup
+        </button>
+        <button className="mf-danger" onClick={deleteSelected}>
+          <Icons.Trash2 size={15} /> Delete container
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="mf-inspector">

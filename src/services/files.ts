@@ -44,6 +44,17 @@ export async function saveFile(opts: SaveOptions): Promise<string | null> {
   return opts.defaultName;
 }
 
+/** Read a text file directly by absolute path (Tauri only; used for Recent). */
+export async function readFileByPath(path: string): Promise<string | null> {
+  if (!isTauri()) return null;
+  const { readTextFile } = await import("@tauri-apps/plugin-fs");
+  try {
+    return await readTextFile(path);
+  } catch {
+    return null;
+  }
+}
+
 export async function openTextFile(filters: { name: string; extensions: string[] }[]): Promise<
   { path: string | null; contents: string } | null
 > {

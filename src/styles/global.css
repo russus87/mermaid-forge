@@ -620,3 +620,77 @@ input, select, textarea { font-family: inherit; }
 .mf-codemode-editor { flex: 1; min-height: 0; }
 .mf-codemode-preview { flex: 1; overflow: auto; padding: 18px; display: grid; place-items: center; }
 .mf-mermaid-view { width: 100%; display: grid; place-items: center; }
+
+/* ============================================================= Group / container node */
+.mf-group {
+  width: 100%; height: 100%;
+  border: 1.6px dashed color-mix(in srgb, var(--accent) 70%, var(--border));
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--accent) 7%, transparent);
+  box-shadow: inset 0 0 40px -20px var(--accent);
+  transition: border-color 0.14s, box-shadow 0.14s;
+}
+.mf-group.is-selected {
+  border-style: solid; border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-weak), inset 0 0 40px -20px var(--accent);
+}
+.mf-group-header {
+  display: inline-flex; align-items: center; gap: 7px;
+  margin: 9px 0 0 11px; padding: 4px 10px 4px 4px;
+  border-radius: 9px;
+  background: var(--panel); border: 1px solid var(--border);
+  font-size: 12px; font-weight: 700;
+  box-shadow: var(--shadow-1);
+}
+.mf-group-icon { width: 24px; height: 24px; display: grid; place-items: center; border-radius: 7px; }
+.mf-group-kind {
+  font-size: 9px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
+  opacity: 0.8;
+}
+.mf-group-label { color: var(--text); }
+.mf-group-edit {
+  border: none; outline: none; background: transparent; color: var(--text);
+  font: inherit; width: 130px;
+  border-bottom: 1.5px solid var(--accent);
+}
+
+/* ============================================================= Alignment toolbar */
+.mf-align {
+  position: absolute; top: 14px; left: 50%; transform: translateX(-50%);
+  z-index: 6;
+  display: flex; align-items: center; gap: 6px;
+  padding: 6px; border-radius: 12px;
+  background: var(--panel-glass); backdrop-filter: blur(14px);
+  border: 1px solid var(--border); box-shadow: var(--shadow-2);
+  animation: mf-pop 0.13s ease;
+}
+.mf-align-grp { display: flex; gap: 2px; padding: 0 4px; }
+.mf-align-grp + .mf-align-grp { border-left: 1px solid var(--border-soft); }
+.mf-align button {
+  width: 30px; height: 30px; display: grid; place-items: center;
+  border: none; border-radius: 7px; background: transparent; color: var(--text-dim);
+  transition: background 0.12s, color 0.12s;
+}
+.mf-align button:hover { background: var(--accent-weak); color: var(--text); }
+.mf-align button:disabled { opacity: 0.3; cursor: not-allowed; }
+
+/* ============================================================= Dropdown menu */
+.mf-dropdown { position: relative; display: inline-flex; }
+.mf-dropdown-backdrop { position: fixed; inset: 0; z-index: 20; }
+.mf-dropdown-menu {
+  position: absolute; top: calc(100% + 6px); left: 0; z-index: 21;
+  min-width: 230px; max-width: 320px;
+  padding: 6px;
+  background: var(--panel); border: 1px solid var(--border);
+  border-radius: 10px; box-shadow: var(--shadow-2);
+  animation: mf-pop 0.12s ease;
+}
+.mf-dropdown-item {
+  display: flex; align-items: center; gap: 9px;
+  width: 100%; padding: 8px 9px;
+  border: none; border-radius: 7px; background: transparent; color: var(--text);
+  font-size: 12.5px; text-align: left;
+}
+.mf-dropdown-item span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mf-dropdown-item:hover { background: var(--accent-weak); }
+.mf-dropdown-empty { padding: 12px; text-align: center; color: var(--text-faint); font-size: 12.5px; }

@@ -85,6 +85,12 @@ export default function App() {
         if (mod && e.key.toLowerCase() === "v") { e.preventDefault(); st.paste(); return; }
         if (mod && e.key.toLowerCase() === "d") { e.preventDefault(); st.duplicateSelection(); return; }
         if (mod && e.key.toLowerCase() === "a") { e.preventDefault(); st.selectAll(); return; }
+        if (mod && e.key.toLowerCase() === "g") {
+          e.preventDefault();
+          if (e.shiftKey) st.ungroupSelected();
+          else st.groupSelected();
+          return;
+        }
         if (e.key === "Delete" || e.key === "Backspace") { e.preventDefault(); st.deleteSelected(); }
       }
     }
