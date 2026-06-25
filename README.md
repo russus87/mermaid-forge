@@ -22,14 +22,33 @@ Built with Tauri 2 + React. Tiny native binaries, instant startup, fully offline
 - **Bidirectional code ↔ canvas sync** — edit visually and watch the Mermaid source update live, or hand-edit the source and rebuild the canvas with `Ctrl+Enter`.
 - **OpenShift / cloud-native palette** — first-class nodes for *Cluster, Project, Pod, Deployment, Service, Route, Ingress, ConfigMap, Secret, PVC, Operator, Registry* and more, so you can sketch the architecture of an OpenShift environment in seconds.
 - **Classic flowchart shapes** — process, decision, stadium, cylinder, hexagon, subroutine, parallelogram, and others.
+- **Editing that feels native** — multi-select (rubber-band), group move, **copy / cut / paste / duplicate**, **double-click to rename**, smart **alignment guides** with snapping, **auto-arrange** (layered layout), undo / redo.
+- **Templates gallery** — start from OpenShift 3-tier, CI/CD pipeline, sequence, class, ER, state machine, Gantt, and more.
+- **Import** any Mermaid source — flowcharts open in the visual editor, everything else in the code editor.
 - **Live Mermaid preview** — render the real Mermaid output side-by-side.
+- **Session restore** — your last diagram and theme are remembered automatically.
 - **Polished, professional UI** — refined dark & light themes, glassy panels, a minimap, snapping grid, and accent-colored nodes.
 - **Export** — `.mmd` source, **SVG**, and high-resolution **PNG**. Save/open native `.forge.json` projects (positions, colors, everything).
-- **Undo / redo**, keyboard shortcuts, and instant search across the component palette.
 
 ## 🖼️ Diagram types
 
-The visual canvas focuses on **graph-shaped** diagrams (flowcharts and architecture). The live preview renders any Mermaid diagram, and the source editor lets you author **sequence, class, state, ER** and the rest of the Mermaid family directly.
+Mermaid Forge has two complementary surfaces:
+
+- **Visual mode** — a full drag-and-drop canvas for **graph-shaped** diagrams (flowcharts and OpenShift / cloud architecture).
+- **Code mode** — a focused editor with a snippet toolbar and live preview for **sequence, class, state, ER, Gantt** and the rest of the Mermaid family.
+
+Importing or opening a template automatically picks the right surface for you.
+
+### Keyboard shortcuts
+
+| Action | Shortcut |
+| --- | --- |
+| Undo / Redo | `Ctrl+Z` / `Ctrl+Shift+Z` |
+| Copy / Cut / Paste | `Ctrl+C` / `Ctrl+X` / `Ctrl+V` |
+| Duplicate | `Ctrl+D` |
+| Select all | `Ctrl+A` |
+| Delete selection | `Del` |
+| Apply code → canvas | `Ctrl+Enter` |
 
 ---
 

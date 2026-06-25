@@ -3,9 +3,13 @@ import * as Icons from "lucide-react";
 
 import { useStore } from "../store/useStore";
 import type { Direction } from "../types";
-import { generateMermaid } from "../mermaid/generate";
 import { openTextFile, saveFile } from "../services/files";
 import { renderSvg, svgToPng } from "../services/export";
+
+interface Props {
+  onOpenTemplates: () => void;
+  onOpenImport: () => void;
+}
 
 const DIRECTIONS: { value: Direction; icon: keyof typeof Icons; title: string }[] = [
   { value: "TB", icon: "ArrowDown", title: "Top to bottom" },
@@ -16,28 +20,24 @@ const DIRECTIONS: { value: Direction; icon: keyof typeof Icons; title: string }[
 
 const PROJECT_FILTER = [{ name: "Mermaid Forge", extensions: ["forge.json", "json"] }];
 
-export function Toolbar() {
+export function Toolbar({ onOpenTemplates, onOpenImport }: Props) {
+  const mode = useStore((s) => s.mode);
   const direction = useStore((s) => s.direction);
   const setDirection = useStore((s) => s.setDirection);
+  const relayout = useStore((s) => s.relayout);
   const undo = useStore((s) => s.undo);
   const redo = useStore((s) => s.redo);
   const canUndo = useStore((s) => s.past.length > 0);
   const canRedo = useStore((s) => s.future.length > 0);
   const theme = useStore((s) => s.theme);
   const toggleTheme = useStore((s) => s.toggleTheme);
-  const newDiagram = useStore((s) => s.newDiagram);
   const dirty = useStore((s) => s.dirty);
   const filePath = useStore((s) => s.filePath);
 
   const [busy, setBusy] = useState<string | null>(null);
 
   async function saveProject() {
-    const s = useStore.getState();
-    const payload = JSON.stringify(
-      { version: 1, direction: s.direction, nodes: s.nodes, edges: s.edges },
-      null,
-      2,
-    );
+    const payload = JSON.stringify(useStore.getState().getPersisted(), null, 2);
     const path = await saveFile({
       defaultName: fileBase() + ".forge.json",
       filters: PROJECT_FILTER,
@@ -54,30 +54,33 @@ export function Toolbar() {
     if (!res) return;
     try {
       const data = JSON.parse(res.contents);
-      useStore.getState().loadSnapshot(
-        { direction: data.direction ?? "TB", nodes: data.nodes ?? [], edges: data.edges ?? [] },
-        res.path,
-      );
+      const st = useStore.getState();
+      if (data.version === 1 && data.snapshot) {
+        st.hydrate(data);
+      } else {
+        // Legacy: a bare snapshot { direction, nodes, edges }.
+        st.loadSnapshot({ direction: data.direction ?? "TB", nodes: data.nodes ?? [], edges: data.edges ?? [] });
+      }
+      st.setFilePath(res.path);
+      st.markSaved();
     } catch {
       alert("That file is not a valid Mermaid Forge project.");
     }
   }
 
   async function exportMermaid() {
-    const s = useStore.getState();
     await saveFile({
       defaultName: fileBase() + ".mmd",
       filters: [{ name: "Mermaid", extensions: ["mmd"] }],
-      contents: generateMermaid(s.direction, s.nodes, s.edges),
+      contents: useStore.getState().currentCode(),
     });
   }
 
   async function exportImage(kind: "svg" | "png") {
-    const s = useStore.getState();
     setBusy(kind);
     try {
-      const code = generateMermaid(s.direction, s.nodes, s.edges);
-      const svg = await renderSvg(code, s.theme);
+      const st = useStore.getState();
+      const svg = await renderSvg(st.currentCode(), st.theme);
       if (kind === "svg") {
         await saveFile({
           defaultName: fileBase() + ".svg",
@@ -111,14 +114,12 @@ export function Toolbar() {
         <span className="mf-logo"><Icons.Workflow size={18} /></span>
         <div className="mf-brand-text">
           <strong>Mermaid Forge</strong>
-          <span className="mf-brand-file">
-            {fileBase()}{dirty ? " •" : ""}
-          </span>
+          <span className="mf-brand-file">{fileBase()}{dirty ? " •" : ""}</span>
         </div>
       </div>
 
       <div className="mf-toolbar-group">
-        <button className="mf-tbtn" onClick={newDiagram} title="New diagram">
+        <button className="mf-tbtn" onClick={onOpenTemplates} title="New from template">
           <Icons.FilePlus2 size={16} />
         </button>
         <button className="mf-tbtn" onClick={openProject} title="Open project">
@@ -126,6 +127,9 @@ export function Toolbar() {
         </button>
         <button className="mf-tbtn" onClick={saveProject} title="Save project">
           <Icons.Save size={16} />
+        </button>
+        <button className="mf-tbtn" onClick={onOpenImport} title="Import Mermaid code">
+          <Icons.ClipboardPaste size={16} />
         </button>
       </div>
 
@@ -138,23 +142,36 @@ export function Toolbar() {
         </button>
       </div>
 
-      <div className="mf-toolbar-group mf-dir">
-        {DIRECTIONS.map((d) => {
-          const I = Icons[d.icon] as Icons.LucideIcon;
-          return (
-            <button
-              key={d.value}
-              className={`mf-tbtn ${direction === d.value ? "active" : ""}`}
-              onClick={() => setDirection(d.value)}
-              title={d.title}
-            >
-              <I size={16} />
+      {mode === "visual" && (
+        <>
+          <div className="mf-toolbar-group mf-dir">
+            {DIRECTIONS.map((d) => {
+              const I = Icons[d.icon] as Icons.LucideIcon;
+              return (
+                <button
+                  key={d.value}
+                  className={`mf-tbtn ${direction === d.value ? "active" : ""}`}
+                  onClick={() => setDirection(d.value)}
+                  title={d.title}
+                >
+                  <I size={16} />
+                </button>
+              );
+            })}
+          </div>
+          <div className="mf-toolbar-group">
+            <button className="mf-tbtn-wide" onClick={relayout} title="Auto-arrange the graph">
+              <Icons.Wand2 size={15} /> Arrange
             </button>
-          );
-        })}
-      </div>
+          </div>
+        </>
+      )}
 
       <div className="mf-toolbar-spacer" />
+
+      {mode === "code" && (
+        <span className="mf-mode-badge"><Icons.Code2 size={13} /> Code mode</span>
+      )}
 
       <div className="mf-toolbar-group">
         <button className="mf-tbtn-wide" onClick={exportMermaid} title="Export .mmd">

@@ -6,6 +6,7 @@ import {
   MiniMap,
   ReactFlow,
   ReactFlowProvider,
+  ViewportPortal,
   useReactFlow,
   type Edge,
   type EdgeTypes,
@@ -22,7 +23,6 @@ const edgeTypes: EdgeTypes = {};
 
 function styleForEdge(e: FlowEdge): Edge {
   const variant = e.data?.style ?? "solid";
-  const stroke = "var(--edge-color)";
   return {
     ...e,
     label: e.data?.label,
@@ -30,7 +30,7 @@ function styleForEdge(e: FlowEdge): Edge {
     animated: variant === "dotted",
     markerEnd: { type: "arrowclosed" as never, color: "#8b93a7", width: 18, height: 18 },
     style: {
-      stroke,
+      stroke: "var(--edge-color)",
       strokeWidth: variant === "thick" ? 3.5 : 2,
       strokeDasharray: variant === "dotted" ? "6 5" : undefined,
     },
@@ -39,6 +39,28 @@ function styleForEdge(e: FlowEdge): Edge {
     labelBgPadding: [6, 3] as [number, number],
     labelBgBorderRadius: 6,
   };
+}
+
+/** Alignment guides drawn in flow coordinates (auto-transformed by the viewport). */
+function HelperLines() {
+  const helperLines = useStore((s) => s.helperLines);
+  if (helperLines.horizontal == null && helperLines.vertical == null) return null;
+  return (
+    <ViewportPortal>
+      {helperLines.vertical != null && (
+        <div
+          className="mf-guide mf-guide-v"
+          style={{ transform: `translateX(${helperLines.vertical}px)` }}
+        />
+      )}
+      {helperLines.horizontal != null && (
+        <div
+          className="mf-guide mf-guide-h"
+          style={{ transform: `translateY(${helperLines.horizontal}px)` }}
+        />
+      )}
+    </ViewportPortal>
+  );
 }
 
 function InnerCanvas() {
@@ -84,9 +106,10 @@ function InnerCanvas() {
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
         onNodeDragStart={() => commit()}
+        onNodeDragStop={() => useStore.setState({ helperLines: { horizontal: null, vertical: null } })}
         onDrop={onDrop}
         onDragOver={onDragOver}
-        onNodeClick={(_, n) => select(n.id, null)}
+        onNodeClick={(_, nd) => select(nd.id, null)}
         onEdgeClick={(_, e) => select(null, e.id)}
         onPaneClick={() => select(null, null)}
         onPaneContextMenu={(e) => {
@@ -103,8 +126,10 @@ function InnerCanvas() {
         maxZoom={2.5}
         snapToGrid
         snapGrid={[16, 16]}
+        selectionOnDrag
+        panOnDrag={[1, 2]}
+        selectNodesOnDrag={false}
         deleteKeyCode={null}
-        multiSelectionKeyCode={null}
       >
         <Background variant={BackgroundVariant.Dots} gap={22} size={1.4} className="mf-bg" />
         <Controls className="mf-controls" showInteractive={false} />
@@ -112,9 +137,10 @@ function InnerCanvas() {
           className="mf-minimap"
           pannable
           zoomable
-          nodeColor={(n) => (n.data as { color?: string })?.color ?? "#6366f1"}
+          nodeColor={(nd) => (nd.data as { color?: string })?.color ?? "#6366f1"}
           maskColor="rgba(10,12,20,0.55)"
         />
+        <HelperLines />
       </ReactFlow>
     </div>
   );

@@ -1,16 +1,54 @@
-import { useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { Toolbar } from "./components/Toolbar";
 import { Palette } from "./components/Palette";
 import { Canvas } from "./components/Canvas";
 import { RightPanel } from "./components/RightPanel";
+import { CodeMode } from "./components/CodeMode";
+import { TemplateGallery } from "./components/TemplateGallery";
+import { ImportDialog } from "./components/ImportDialog";
 import { useStore } from "./store/useStore";
+
+const STORAGE_KEY = "mermaid-forge:session:v1";
 
 export default function App() {
   const theme = useStore((s) => s.theme);
-  const undo = useStore((s) => s.undo);
-  const redo = useStore((s) => s.redo);
-  const deleteSelected = useStore((s) => s.deleteSelected);
+  const mode = useStore((s) => s.mode);
+  const [templatesOpen, setTemplatesOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
+  const hydrated = useRef(false);
+
+  // Restore last session once on startup.
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (raw) useStore.getState().hydrate(JSON.parse(raw));
+    } catch {
+      /* ignore corrupt session */
+    }
+    hydrated.current = true;
+  }, []);
+
+  // Persist on change (debounced).
+  useEffect(() => {
+    let t: ReturnType<typeof setTimeout>;
+    const unsub = useStore.subscribe((s) => {
+      if (!hydrated.current) return;
+      clearTimeout(t);
+      const persist = s.getPersisted;
+      t = setTimeout(() => {
+        try {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(persist()));
+        } catch {
+          /* storage full / unavailable */
+        }
+      }, 400);
+    });
+    return () => {
+      clearTimeout(t);
+      unsub();
+    };
+  }, []);
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -25,34 +63,52 @@ export default function App() {
         target.tagName === "SELECT" ||
         target.isContentEditable;
 
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") {
+      const mod = e.ctrlKey || e.metaKey;
+      const st = useStore.getState();
+
+      if (mod && e.key.toLowerCase() === "z") {
         e.preventDefault();
-        if (e.shiftKey) redo();
-        else undo();
+        if (e.shiftKey) st.redo();
+        else st.undo();
         return;
       }
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "y") {
+      if (mod && e.key.toLowerCase() === "y") {
         e.preventDefault();
-        redo();
+        st.redo();
         return;
       }
-      if ((e.key === "Delete" || e.key === "Backspace") && !typing) {
-        e.preventDefault();
-        deleteSelected();
+
+      // Graph clipboard shortcuts only apply on the visual canvas.
+      if (st.mode === "visual" && !typing) {
+        if (mod && e.key.toLowerCase() === "c") { e.preventDefault(); st.copySelection(); return; }
+        if (mod && e.key.toLowerCase() === "x") { e.preventDefault(); st.cutSelection(); return; }
+        if (mod && e.key.toLowerCase() === "v") { e.preventDefault(); st.paste(); return; }
+        if (mod && e.key.toLowerCase() === "d") { e.preventDefault(); st.duplicateSelection(); return; }
+        if (mod && e.key.toLowerCase() === "a") { e.preventDefault(); st.selectAll(); return; }
+        if (e.key === "Delete" || e.key === "Backspace") { e.preventDefault(); st.deleteSelected(); }
       }
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [undo, redo, deleteSelected]);
+  }, []);
 
   return (
     <div className="mf-app">
-      <Toolbar />
-      <div className="mf-workspace">
-        <Palette />
-        <Canvas />
-        <RightPanel />
-      </div>
+      <Toolbar onOpenTemplates={() => setTemplatesOpen(true)} onOpenImport={() => setImportOpen(true)} />
+      {mode === "visual" ? (
+        <div className="mf-workspace">
+          <Palette />
+          <Canvas />
+          <RightPanel />
+        </div>
+      ) : (
+        <div className="mf-workspace-code">
+          <CodeMode />
+        </div>
+      )}
+
+      {templatesOpen && <TemplateGallery onClose={() => setTemplatesOpen(false)} />}
+      {importOpen && <ImportDialog onClose={() => setImportOpen(false)} />}
     </div>
   );
 }

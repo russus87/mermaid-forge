@@ -1,8 +1,9 @@
-import { memo, useMemo } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { Handle, NodeResizer, Position, type NodeProps } from "@xyflow/react";
 import * as Icons from "lucide-react";
 
 import type { FlowNode, ShapeKind } from "../../types";
+import { useStore } from "../../store/useStore";
 
 /** CSS clip-paths giving each Mermaid shape a recognizable silhouette. */
 const CLIP: Partial<Record<ShapeKind, string>> = {
@@ -48,6 +49,23 @@ function ShapeNodeImpl({ data, selected, id }: NodeProps<FlowNode>) {
   const accent = data.color ?? "#6366f1";
   const clip = CLIP[data.shape];
   const isCircle = data.shape === "circle" || data.shape === "doublecircle";
+  const updateNodeData = useStore((s) => s.updateNodeData);
+
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(data.label);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (editing) {
+      setDraft(data.label);
+      requestAnimationFrame(() => inputRef.current?.select());
+    }
+  }, [editing, data.label]);
+
+  function commit() {
+    setEditing(false);
+    if (draft !== data.label) updateNodeData(id, { label: draft });
+  }
 
   const style = useMemo<React.CSSProperties>(
     () => ({
@@ -61,7 +79,15 @@ function ShapeNodeImpl({ data, selected, id }: NodeProps<FlowNode>) {
   );
 
   return (
-    <div className={`mf-node ${selected ? "is-selected" : ""}`} style={style} data-shape={data.shape}>
+    <div
+      className={`mf-node ${selected ? "is-selected" : ""}`}
+      style={style}
+      data-shape={data.shape}
+      onDoubleClick={(e) => {
+        e.stopPropagation();
+        setEditing(true);
+      }}
+    >
       <NodeResizer
         isVisible={selected}
         minWidth={120}
@@ -70,22 +96,10 @@ function ShapeNodeImpl({ data, selected, id }: NodeProps<FlowNode>) {
         handleClassName="mf-resize-handle"
       />
       {HANDLE_POSITIONS.map((h) => (
-        <Handle
-          key={`s-${h.id}`}
-          id={h.id}
-          type="source"
-          position={h.position}
-          className="mf-handle"
-        />
+        <Handle key={`s-${h.id}`} id={h.id} type="source" position={h.position} className="mf-handle" />
       ))}
       {HANDLE_POSITIONS.map((h) => (
-        <Handle
-          key={`tg-${h.id}`}
-          id={`${h.id}-t`}
-          type="target"
-          position={h.position}
-          className="mf-handle mf-handle-target"
-        />
+        <Handle key={`tg-${h.id}`} id={`${h.id}-t`} type="target" position={h.position} className="mf-handle mf-handle-target" />
       ))}
 
       <div className="mf-node-body">
@@ -96,13 +110,27 @@ function ShapeNodeImpl({ data, selected, id }: NodeProps<FlowNode>) {
         )}
         <div className="mf-node-text">
           {data.kind && <span className="mf-node-kind" style={{ color: accent }}>{data.kind}</span>}
-          <span className="mf-node-label">{data.label || "Untitled"}</span>
-          {data.subtitle && <span className="mf-node-sub">{data.subtitle}</span>}
+          {editing ? (
+            <input
+              ref={inputRef}
+              className="mf-node-edit nodrag nopan"
+              value={draft}
+              autoFocus
+              onChange={(e) => setDraft(e.target.value)}
+              onBlur={commit}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") commit();
+                if (e.key === "Escape") setEditing(false);
+                e.stopPropagation();
+              }}
+            />
+          ) : (
+            <span className="mf-node-label">{data.label || "Untitled"}</span>
+          )}
+          {data.subtitle && !editing && <span className="mf-node-sub">{data.subtitle}</span>}
         </div>
       </div>
       <span className="mf-node-rail" style={{ background: accent }} aria-hidden />
-      {/* id kept for a11y / debugging */}
-      <span hidden>{id}</span>
     </div>
   );
 }
