@@ -107,12 +107,12 @@ jobs:
         run: |
           sudo -u builder bash -c '
             set -e
-            cd "$GITHUB_WORKSPACE"
+            cd "$1"
             npm ci
             npm run build
             cd src-tauri
             cargo build --release
-          '
+          ' _ "$GITHUB_WORKSPACE"
 
       - name: Determine version
         id: ver
@@ -124,12 +124,12 @@ jobs:
         run: |
           sudo -u builder bash -c '
             set -e
-            cd "$GITHUB_WORKSPACE/packaging/arch"
-            cp "$GITHUB_WORKSPACE/src-tauri/target/release/mermaid-forge" ./mermaid-forge
-            cp "$GITHUB_WORKSPACE/assets/logo.svg" ./mermaid-forge.svg
+            cd "$1/packaging/arch"
+            cp "$1/src-tauri/target/release/mermaid-forge" ./mermaid-forge
+            cp "$1/assets/logo.svg" ./mermaid-forge.svg
             sed -i "s/^pkgver=.*/pkgver=${{ steps.ver.outputs.version }}/" PKGBUILD
             makepkg -f --noconfirm
-          '
+          ' _ "$GITHUB_WORKSPACE"
 
       - name: Upload .pkg.tar.zst to the release
         env:
