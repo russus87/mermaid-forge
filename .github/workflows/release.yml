@@ -1,0 +1,150 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to build (e.g. v0.1.0)"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  # ---------------------------------------------------------------- desktop
+  build-tauri:
+    name: Build (${{ matrix.label }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: macos-latest
+            label: macOS Apple Silicon
+            args: "--target aarch64-apple-darwin"
+          - platform: macos-latest
+            label: macOS Intel
+            args: "--target x86_64-apple-darwin"
+          - platform: ubuntu-22.04
+            label: Linux x86_64
+            args: ""
+          - platform: windows-latest
+            label: Windows x86_64
+            args: ""
+
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Linux system dependencies
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libappindicator3-dev \
+            librsvg2-dev \
+            patchelf \
+            build-essential \
+            curl wget file libxdo-dev libssl-dev
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: "./src-tauri -> target"
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Build the app & release bundles
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: ${{ github.ref_type == 'tag' && github.ref_name || github.event.inputs.tag }}
+          releaseName: "Mermaid Forge __VERSION__"
+          releaseBody: "See the assets below to download and install Mermaid Forge for your platform."
+          releaseDraft: true
+          prerelease: false
+          args: ${{ matrix.args }}
+
+  # --------------------------------------------------------- Arch .pkg.tar.zst
+  build-arch:
+    name: Build (Arch .pkg.tar.zst)
+    needs: build-tauri
+    runs-on: ubuntu-latest
+    container:
+      image: archlinux:base-devel
+    steps:
+      - name: Install dependencies
+        run: |
+          pacman -Syu --noconfirm \
+            git nodejs npm rust webkit2gtk-4.1 gtk3 \
+            libappindicator-gtk3 librsvg base-devel sudo openssl
+
+      - uses: actions/checkout@v4
+
+      - name: Create build user (makepkg refuses to run as root)
+        run: |
+          useradd -m builder
+          echo "builder ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
+          chown -R builder:builder "$GITHUB_WORKSPACE"
+
+      - name: Build frontend and Tauri binary
+        run: |
+          sudo -u builder bash -c '
+            set -e
+            cd "$GITHUB_WORKSPACE"
+            npm ci
+            npm run build
+            cd src-tauri
+            cargo build --release
+          '
+
+      - name: Determine version
+        id: ver
+        run: |
+          TAG="${{ github.ref_type == 'tag' && github.ref_name || github.event.inputs.tag }}"
+          echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Assemble and run makepkg
+        run: |
+          sudo -u builder bash -c '
+            set -e
+            cd "$GITHUB_WORKSPACE/packaging/arch"
+            cp "$GITHUB_WORKSPACE/src-tauri/target/release/mermaid-forge" ./mermaid-forge
+            cp "$GITHUB_WORKSPACE/assets/logo.svg" ./mermaid-forge.svg
+            sed -i "s/^pkgver=.*/pkgver=${{ steps.ver.outputs.version }}/" PKGBUILD
+            makepkg -f --noconfirm
+          '
+
+      - name: Upload .pkg.tar.zst to the release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${{ github.ref_type == 'tag' && github.ref_name || github.event.inputs.tag }}"
+          PKG=$(ls packaging/arch/*.pkg.tar.zst | head -1)
+          echo "Uploading $PKG to release $TAG"
+          # gh is not preinstalled in the Arch container; use the REST API.
+          UPLOAD_NAME=$(basename "$PKG")
+          RELEASE_ID=$(curl -s -H "Authorization: token $GITHUB_TOKEN" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/releases/tags/${TAG}" | \
+            grep -m1 '"id":' | grep -o '[0-9]\+' | head -1)
+          curl -s --fail \
+            -H "Authorization: token $GITHUB_TOKEN" \
+            -H "Content-Type: application/zstd" \
+            --data-binary @"$PKG" \
+            "https://uploads.github.com/repos/${GITHUB_REPOSITORY}/releases/${RELEASE_ID}/assets?name=${UPLOAD_NAME}"

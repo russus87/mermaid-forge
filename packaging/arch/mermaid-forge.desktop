@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=Mermaid Forge
+GenericName=Diagram Editor
+Comment=Visual editor for Mermaid diagrams with drag-and-drop graph editing
+Exec=mermaid-forge %F
+Icon=mermaid-forge
+Terminal=false
+Categories=Development;Graphics;Utility;
+MimeType=text/vnd.mermaid;application/json;
+Keywords=mermaid;diagram;flowchart;graph;openshift;architecture;
+StartupWMClass=Mermaid Forge

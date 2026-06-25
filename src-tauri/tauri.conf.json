@@ -1,0 +1,50 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Mermaid Forge",
+  "version": "0.1.0",
+  "identifier": "io.github.russus87.mermaid-forge",
+  "build": {
+    "frontendDist": "../dist",
+    "devUrl": "http://localhost:1420",
+    "beforeDevCommand": "npm run dev",
+    "beforeBuildCommand": "npm run build"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "Mermaid Forge",
+        "width": 1380,
+        "height": 880,
+        "minWidth": 980,
+        "minHeight": 640,
+        "resizable": true,
+        "center": true,
+        "theme": "Dark"
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["deb", "rpm", "appimage", "nsis", "dmg"],
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "category": "DeveloperTool",
+    "shortDescription": "Visual editor for Mermaid diagrams",
+    "longDescription": "Mermaid Forge is a beautiful, professional desktop editor for Mermaid diagrams with drag-and-drop graph editing, bidirectional code sync, and a dedicated palette for OpenShift / cloud-native architecture diagrams.",
+    "homepage": "https://github.com/russus87/mermaid-forge",
+    "license": "MIT",
+    "linux": {
+      "deb": {
+        "depends": []
+      }
+    }
+  }
+}

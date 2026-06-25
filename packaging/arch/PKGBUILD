@@ -1,0 +1,28 @@
+# Maintainer: russus87
+# This PKGBUILD packages a pre-built Mermaid Forge binary (produced by the
+# CI Tauri build) into an Arch .pkg.tar.zst. The CI workflow copies the
+# compiled `mermaid-forge` binary and the icon next to this file before
+# invoking `makepkg`.
+pkgname=mermaid-forge
+pkgver=0.1.0
+pkgrel=1
+pkgdesc="A beautiful, professional visual editor for Mermaid diagrams (drag-and-drop, OpenShift architecture)"
+arch=('x86_64')
+url="https://github.com/russus87/mermaid-forge"
+license=('MIT')
+depends=('webkit2gtk-4.1' 'gtk3' 'libappindicator-gtk3')
+options=('!strip' '!debug')
+source=('mermaid-forge'
+        'mermaid-forge.desktop'
+        'mermaid-forge.svg')
+sha256sums=('SKIP'
+            'SKIP'
+            'SKIP')
+
+package() {
+    install -Dm755 "${srcdir}/mermaid-forge" "${pkgdir}/usr/bin/mermaid-forge"
+    install -Dm644 "${srcdir}/mermaid-forge.desktop" \
+        "${pkgdir}/usr/share/applications/mermaid-forge.desktop"
+    install -Dm644 "${srcdir}/mermaid-forge.svg" \
+        "${pkgdir}/usr/share/icons/hicolor/scalable/apps/mermaid-forge.svg"
+}

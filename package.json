@@ -1,0 +1,36 @@
+{
+  "name": "mermaid-forge",
+  "version": "0.1.0",
+  "description": "A beautiful, professional visual editor for Mermaid diagrams with drag-and-drop graph editing and OpenShift architecture support.",
+  "type": "module",
+  "license": "MIT",
+  "author": "russus87",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "tauri": "tauri",
+    "tauri:dev": "tauri dev",
+    "tauri:build": "tauri build"
+  },
+  "dependencies": {
+    "@tauri-apps/api": "^2.1.1",
+    "@tauri-apps/plugin-dialog": "^2.2.0",
+    "@tauri-apps/plugin-fs": "^2.2.0",
+    "@xyflow/react": "^12.3.5",
+    "mermaid": "^11.4.1",
+    "lucide-react": "^0.460.0",
+    "nanoid": "^5.0.9",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "zustand": "^5.0.2"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.1.0",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.4",
+    "typescript": "^5.6.3",
+    "vite": "^6.0.3"
+  }
+}
