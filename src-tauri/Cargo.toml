@@ -1,6 +1,6 @@
 [package]
 name = "mermaid-forge"
-version = "0.1.0"
+version = "0.1.1"
 description = "A beautiful, professional visual editor for Mermaid diagrams"
 authors = ["russus87"]
 license = "MIT"
