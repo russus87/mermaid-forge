@@ -109,9 +109,11 @@ jobs:
             set -e
             cd "$1"
             npm ci
-            npm run build
-            cd src-tauri
-            cargo build --release
+            # Use the Tauri CLI (production build) so the frontend assets are
+            # embedded in the binary. A plain `cargo build --release` leaves the
+            # app pointing at the dev server (localhost:1420). --no-bundle skips
+            # the deb/rpm/appimage bundlers we do not need inside the Arch image.
+            npm run tauri build -- --no-bundle
           ' _ "$GITHUB_WORKSPACE"
 
       - name: Determine version
